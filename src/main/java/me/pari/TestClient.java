@@ -12,6 +12,7 @@ public class TestClient {
         try (Socket socket = new Socket("127.0.0.1", 7777)) {
             DataOutputStream output = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
             output.writeBytes("{\"ciao\": \"Ciao\"}");
+            output.flush();
 
         }catch (Exception ex) {
             ex.printStackTrace();

@@ -1,8 +1,8 @@
 package me.pari;
 
 import com.google.gson.Gson;
+import me.pari.connection.Request;
 import me.pari.types.Client;
-import me.pari.types.Packet;
 import org.hydev.logger.HyLogger;
 
 import java.io.IOException;
@@ -81,8 +81,33 @@ public class Server extends Thread {
         }
     }
 
-    public void handle(Packet data) {
-        LOGGER.log("Handled: " + new Gson().toJson(data));
+    public void handle(Client c, Request r) {
+        LOGGER.log("Handled: " + new Gson().toJson(r));
+
+        // Get method
+        String method = r.getMethod();
+
+        // Packet method is empty
+        if (method == null) {
+            c.sendResponse(r.getId(), 400, "BadRequest");
+            return;
+        }
+
+        // Auth method
+        if (method.equalsIgnoreCase("authUser")) {
+            // TODO: Authenticate current user
+            c.setAuthToken("...");
+        }
+
+        // Client is not authenticated
+        // TODO: Check with database
+        if (c.getAuthToken() == null) {
+            c.sendResponse(r.getId(), 401, "Unauthorized");
+            return;
+        }
+
+        // TODO: Other methods
+
     }
 
     public void stopServer() {

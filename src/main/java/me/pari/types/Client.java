@@ -2,16 +2,15 @@ package me.pari.types;
 
 import com.google.gson.Gson;
 import me.pari.Server;
-import netscape.javascript.JSObject;
+import me.pari.connection.Request;
+import me.pari.connection.Response;
 import org.hydev.logger.HyLogger;
-import org.json.JSONObject;
 
 import java.io.*;
+import java.util.List;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Client extends Thread {
@@ -29,6 +28,7 @@ public class Client extends Thread {
     private final Socket socket;
     private final DataOutputStream output;
     private final DataInputStream input;
+    private String authToken;
 
     public Client(Socket socket) throws IOException {
         this.socket = socket;
@@ -48,29 +48,26 @@ public class Client extends Thread {
             try {
                 // Read bytes from the client
                 byte[] bytes = input.readAllBytes();
-                System.out.println(Arrays.toString(bytes));
 
                 // The client disconnected...
                 if (bytes.length == 0) {
                     LOGGER.log("Client disconnected: " + socket.getRemoteSocketAddress());
-                    close();
-                    return;
+                    break;
                 }
 
                 // Serialize to a readable packet
-                Packet p = new Gson().fromJson(new String(bytes), Packet.class);
+                Request p = new Gson().fromJson(new String(bytes), Request.class);
 
                 // Handle the packet by the server
-                server.handle(p);
+                server.handle(this, p);
 
-            } catch (IOException | InterruptedException e) {
+            } catch (IOException e) {
                 LOGGER.log("Error reading bytes: " + e.getMessage());
             }
         }
-    }
 
-    public void sendData(Packet data) throws IOException {
-        output.writeBytes(data.toString());
+        // Close client
+        close();
     }
 
     public synchronized void close() {
@@ -84,8 +81,36 @@ public class Client extends Thread {
         }
     }
 
+    public String getAuthToken() {
+        return authToken;
+    }
+
+    public void setAuthToken(String authToken) {
+        this.authToken = authToken;
+    }
+
+    // Communication methods
+
+    public void sendMessage(String text) {
+        // sendData(Packet(text));
+    }
+
+    public void sendResponse(int id, int status, String desc) {
+        sendResponse(new Response(id, status, desc));
+    }
+
+    public void sendResponse(Response r) {
+
+    }
+
+    // Static methods
+
     public static synchronized List<Client> getClients() {
         return clients;
     }
 
+    public static void sendMessageBroadcast(String text) {
+        for (Client c: getClients())
+            c.sendMessage(text);
+    }
 }

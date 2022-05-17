@@ -1,28 +1,49 @@
 package me.pari;
 
 import java.awt.Color;
+
+import me.pari.types.Client;
 import org.hydev.logger.HyLogger;
 import sun.misc.Signal;
 
 
 public class Main {
 
+    /*
+    *
+    * Connection:
+    *   Client -> Connection (210) -> Server
+    *   Server -> Ok (210) -> Client
+    *
+    * Auth:
+    *   Client -> authUser (211) -> Server
+    *   Server -> Ok (211) -> Client
+    *
+    * Message:
+    *   Client -> sendMessage (212) -> Server
+    *   Server -> Ok (212) -> Client
+    *   Server -> message -> BroadCast
+    *
+    * */
+
     // Logger
     private static final HyLogger LOGGER = new HyLogger("Main");
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
 
         // Create server
         Server s = Server.getInstance();
-        s.start();
 
-        // Handle server stop command (console)
-        Signal.handle(new Signal("INT"), signal -> s.stopServer());
+        // Run server
+        s.start();
 
         // Server started
         onStarted();
 
-        // Waiting...
+        // Handle server stop command (console)
+        Signal.handle(new Signal("INT"), signal -> s.stopServer());
+
+        // Waiting optimizing...
         while (s.isServerRunning())
             Thread.onSpinWait();
 
@@ -36,6 +57,7 @@ public class Main {
 
     public static void onStopped() {
         LOGGER.getFancy().gradient("Server stopped.", new Color(255, 0, 128), new Color(255, 140, 0));
+        Client.sendMessageBroadcast("Server closed.");
     }
 
 }
