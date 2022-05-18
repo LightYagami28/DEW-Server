@@ -1,16 +1,21 @@
 package me.pari.types;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonSyntaxException;
 import me.pari.Server;
+import me.pari.Utils;
+import me.pari.connection.Message;
 import me.pari.connection.Request;
 import me.pari.connection.Response;
 import org.hydev.logger.HyLogger;
 
 import java.io.*;
-import java.util.List;
 import java.net.Socket;
+import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Client extends Thread {
@@ -20,6 +25,8 @@ public class Client extends Thread {
 
     // Synchronized client list
     private static final List<Client> clients = Collections.synchronizedList(new ArrayList<>());
+
+    public static final Gson json = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 
     // Current client is connected
     private final AtomicBoolean isConnected = new AtomicBoolean(false);
@@ -44,25 +51,41 @@ public class Client extends Thread {
     @Override
     public void run() {
         Server server = Server.getInstance();
+        int c;
+
         while (isConnected.get()) {
             try {
-                // Read bytes from the client
-                byte[] bytes = input.readAllBytes();
+                // Create a buffer
+                StringBuilder buff = new StringBuilder();
 
-                // The client disconnected...
-                if (bytes.length == 0) {
-                    LOGGER.log("Client disconnected: " + socket.getRemoteSocketAddress());
-                    break;
-                }
+                do {
+                    c = input.read();
+
+                    // The client disconnected
+                    if (c == -1)
+                        throw new SocketException("Connection closed");
+
+                    // Append to the buffer
+                    buff.append((char) c);
+
+                } while (!Utils.isJson(buff.toString()));
 
                 // Serialize to a readable packet
-                Request p = new Gson().fromJson(new String(bytes), Request.class);
+                Request p = json.fromJson(new String(buff), Request.class);
+                p.setClient(this);
 
                 // Handle the packet by the server
-                server.handle(this, p);
+                server.handle(p);
 
-            } catch (IOException e) {
-                LOGGER.log("Error reading bytes: " + e.getMessage());
+            } catch (JsonSyntaxException ex) {
+                LOGGER.log("Bad Packet sent by " + this.socket.getRemoteSocketAddress());
+
+            } catch (SocketException ex) {
+                LOGGER.log("Client disconnected: " + socket.getRemoteSocketAddress() + " due to: " + ex.getMessage());
+                break;
+
+            } catch (IOException ex) {
+                LOGGER.log("Error reading bytes: " + ex.getMessage());
             }
         }
 
@@ -81,8 +104,11 @@ public class Client extends Thread {
         }
     }
 
-    public String getAuthToken() {
-        return authToken;
+    public boolean validateToken() {
+        if (authToken == null)
+            return false;
+        // TODO: Check on database
+        return true;
     }
 
     public void setAuthToken(String authToken) {
@@ -91,16 +117,18 @@ public class Client extends Thread {
 
     // Communication methods
 
-    public void sendMessage(String text) {
-        // sendData(Packet(text));
+    public void sendMessage(Message msg) throws IOException {
+        this.output.writeBytes(json.toJson(msg));
+        this.output.flush();
     }
 
-    public void sendResponse(int id, int status, String desc) {
+    public void sendResponse(int id, int status, String desc) throws IOException {
         sendResponse(new Response(id, status, desc));
     }
 
-    public void sendResponse(Response r) {
-
+    public void sendResponse(Response r) throws IOException {
+        this.output.writeBytes(json.toJson(r));
+        this.output.flush();
     }
 
     // Static methods
@@ -110,7 +138,13 @@ public class Client extends Thread {
     }
 
     public static void sendMessageBroadcast(String text) {
+        Message msg = new Message(10, text);
+
         for (Client c: getClients())
-            c.sendMessage(text);
+            try {
+                c.sendMessage(msg);
+            } catch (IOException ignored) {
+
+            }
     }
 }

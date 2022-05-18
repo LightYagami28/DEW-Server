@@ -1,34 +1,57 @@
 package me.pari;
 
-import com.google.gson.Gson;
-import me.pari.connection.Request;
-import me.pari.types.Client;
-import org.hydev.logger.HyLogger;
-
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.net.Socket;
 import java.net.ServerSocket;
 import java.net.InetSocketAddress;
-import java.net.Socket;
+import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.hydev.logger.HyLogger;
+
+import me.pari.methods.*;
+import me.pari.types.Storage;
+import me.pari.types.Client;
+import me.pari.connection.Request;
+import me.pari.connection.Response;
+
+
 public class Server extends Thread {
-    // private static final String[] actions = new String[] {"authUser", "createUser", "sendMessage", "getMessages", "getUsersCount"};
 
     // Logger
     private static final HyLogger LOGGER = new HyLogger("Server");
 
     // Some settings
-    private static final int PORT = 7777;
-    private static final int MAX_CLIENTS = 200;
+    public static final int PORT = 7777;
+    public static final int MAX_CLIENTS = 200;
+    public static final String DATABASE_NAME = "database.db";
 
     // Singleton
     private static Server INSTANCE;
 
+    // Methods
+    public static HashMap<String, Class<? extends Method>> methods = new HashMap<>();
+
     // Server running atomic
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
-    // Server main socket
+    // Server socket
     private ServerSocket server;
+
+    public Server() {
+
+        // Auth methods
+        methods.put("CreateUser".toLowerCase(), CreateUser.class);
+        methods.put("AuthUser".toLowerCase(), AuthUser.class);
+
+        // Send message to server
+        methods.put("SendMessage".toLowerCase(), SendMessage.class);
+
+        // Get server info
+        methods.put("GetMessages".toLowerCase(), GetMessages.class);
+        methods.put("GetUsers".toLowerCase(), GetUsers.class);
+    }
 
     public static Server getInstance() {
         if (INSTANCE == null)
@@ -59,7 +82,7 @@ public class Server extends Thread {
                     // New connection
                     LOGGER.log("Client connected: " + clientSocket.getRemoteSocketAddress());
 
-
+                    // Handle new connection
                     new Client(clientSocket).start();
 
                 } catch (IOException ex) {
@@ -81,33 +104,42 @@ public class Server extends Thread {
         }
     }
 
-    public void handle(Client c, Request r) {
-        LOGGER.log("Handled: " + new Gson().toJson(r));
+    public void handle(Request r) throws IOException {
+        LOGGER.log("Handled: " + Client.json.toJson(r));
 
-        // Get method
+        // Get method and client
         String method = r.getMethod();
+        Client c = r.getClient();
 
         // Packet method is empty
         if (method == null) {
-            c.sendResponse(r.getId(), 400, "BadRequest");
+            r.sendResponse(400, "BadRequest");
             return;
         }
 
-        // Auth method
-        if (method.equalsIgnoreCase("authUser")) {
-            // TODO: Authenticate current user
-            c.setAuthToken("...");
-        }
+        // Convert method in lowercase
+        method = method.toLowerCase();
 
-        // Client is not authenticated
-        // TODO: Check with database
-        if (c.getAuthToken() == null) {
-            c.sendResponse(r.getId(), 401, "Unauthorized");
+        // Get class method
+        Method t;
+        try {
+            t = methods.get(method).getDeclaredConstructor().newInstance();
+        } catch (InstantiationException | NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
+            ex.printStackTrace();
             return;
         }
 
-        // TODO: Other methods
+        // Need to be authorized and Client is not authorized
+        if (t.isNeededAuth() && !c.validateToken()) {
+            r.sendResponse(401, "Unauthorized");
+            return;
+        }
 
+        // Execute the action
+        Response serverResponse = t.execute(r);
+
+        // Respond to the client
+        r.sendResponse(serverResponse);
     }
 
     public void stopServer() {

@@ -1,9 +1,18 @@
 package me.pari.connection;
 
-public class Response extends Packet {
+import com.google.gson.annotations.Expose;
 
+import java.util.HashMap;
+
+public class Response extends Packet {
+    @Expose
     private final int status;
+
+    @Expose
     private final String desc;
+
+    @Expose
+    private HashMap<String, String> values;
 
     /*
     * Server response to the client request.
@@ -15,11 +24,7 @@ public class Response extends Packet {
         this.desc = desc;
     }
 
-    public int getStatus() {
-        return status;
-    }
-
-    public String getDesc() {
-        return desc;
+    public void setValues(HashMap<String, String> values) {
+        this.values = values;
     }
 }
