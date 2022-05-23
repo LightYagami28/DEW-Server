@@ -1,10 +1,8 @@
-package me.pari.types;
+package me.pari;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
-import me.pari.Server;
-import me.pari.Utils;
 import me.pari.connection.Message;
 import me.pari.connection.Request;
 import me.pari.connection.Response;
@@ -13,6 +11,7 @@ import org.hydev.logger.HyLogger;
 import java.io.*;
 import java.net.Socket;
 import java.net.SocketException;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -26,16 +25,17 @@ public class Client extends Thread {
     // Synchronized client list
     private static final List<Client> clients = Collections.synchronizedList(new ArrayList<>());
 
+    // Json Builder
     public static final Gson json = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 
-    // Current client is connected
+    // Current client status info
     private final AtomicBoolean isConnected = new AtomicBoolean(false);
-
-    // Current client socket info
     private final Socket socket;
     private final DataOutputStream output;
     private final DataInputStream input;
     private String authToken;
+    private String username;
+    private int userId;
 
     public Client(Socket socket) throws IOException {
         this.socket = socket;
@@ -107,12 +107,29 @@ public class Client extends Thread {
     public boolean validateToken() {
         if (authToken == null)
             return false;
-        // TODO: Check on database
-        return true;
+        try {
+            return !Storage.getInstance().isTokenExpired(authToken);
+        } catch (SQLException ex) {
+            LOGGER.error("SQL Exception in isTokenExpired: " + ex.getMessage());
+            return false;
+        }
     }
 
-    public void setAuthToken(String authToken) {
+    public synchronized void setAuthToken(String authToken) {
         this.authToken = authToken;
+    }
+
+    public synchronized void setUsername(String username) {
+        this.username = username;
+    }
+
+    public synchronized String getUsername() {
+        return username;
+    }
+
+    public synchronized void setUserId(int userId) {
+        if (this.userId != userId)
+            this.userId = userId;
     }
 
     // Communication methods
@@ -137,12 +154,27 @@ public class Client extends Thread {
         return clients;
     }
 
-    public static void sendMessageBroadcast(String text) {
-        Message msg = new Message(10, text);
+    public static void sendMessageBroadcast(int fromUserId, String fromUsername, String text) throws SQLException {
+        int msgId = Storage.getInstance().addMessage(fromUserId, text);
+        Message msg = new Message(msgId, fromUserId, fromUsername, text);
 
         for (Client c: getClients())
             try {
-                c.sendMessage(msg);
+                if (c.validateToken())
+                    c.sendMessage(msg);
+            } catch (IOException ignored) {
+
+            }
+    }
+
+    public void sendMessageBroadcast(String text) throws SQLException {
+        int msgId = Storage.getInstance().addMessage(userId, text);
+        Message msg = new Message(msgId, userId, username, text);
+
+        for (Client c: getClients())
+            try {
+                if (c.validateToken())
+                    c.sendMessage(msg);
             } catch (IOException ignored) {
 
             }

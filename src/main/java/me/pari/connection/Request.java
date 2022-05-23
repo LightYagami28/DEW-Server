@@ -1,12 +1,13 @@
 package me.pari.connection;
 
 import com.google.gson.annotations.Expose;
-import me.pari.types.Client;
+import me.pari.Client;
 
 import java.io.IOException;
 import java.util.HashMap;
 
 public class Request extends Packet {
+
     @Expose
     private final String method;
 

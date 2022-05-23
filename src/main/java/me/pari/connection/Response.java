@@ -24,6 +24,12 @@ public class Response extends Packet {
         this.desc = desc;
     }
 
+    public Response(int id, int status) {
+        super(id);
+        this.status = status;
+        this.desc = null;
+    }
+
     public void setValues(HashMap<String, String> values) {
         this.values = values;
     }

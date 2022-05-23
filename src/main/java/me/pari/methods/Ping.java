@@ -2,11 +2,11 @@ package me.pari.methods;
 
 import me.pari.connection.Request;
 import me.pari.connection.Response;
+import me.pari.connection.Status;
 
-public class GetMessages extends Method{
+public class Ping extends Method {
     @Override
     public Response execute(Request r) {
-        // TODO: Retrieve last messages from database
-        return null;
+        return new Response(r.getId(), Status.OK);
     }
 }

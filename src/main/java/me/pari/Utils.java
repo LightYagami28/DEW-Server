@@ -10,6 +10,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class Utils {
 
     private static final char [] subset = "0123456789abcdefghijklmnopqrstuvwxyz".toCharArray();
+    public static final String SALT = "WhyAreYouGae?";
 
     public static String generateToken() {
         Random r = ThreadLocalRandom.current();
@@ -19,6 +20,10 @@ public class Utils {
             buf[i] = subset[index];
         }
         return new String(buf);
+    }
+
+    public static String hashPassword(String password) {
+        return org.apache.commons.codec.digest.DigestUtils.sha256Hex(password + SALT);
     }
 
     public static boolean isJson(String text) {

@@ -1,20 +1,16 @@
 package me.pari;
 
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.net.Socket;
-import java.net.ServerSocket;
-import java.net.InetSocketAddress;
-import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
-
+import me.pari.connection.Request;
+import me.pari.methods.*;
 import org.hydev.logger.HyLogger;
 
-import me.pari.methods.*;
-import me.pari.types.Storage;
-import me.pari.types.Client;
-import me.pari.connection.Request;
-import me.pari.connection.Response;
+import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 public class Server extends Thread {
@@ -51,6 +47,9 @@ public class Server extends Thread {
         // Get server info
         methods.put("GetMessages".toLowerCase(), GetMessages.class);
         methods.put("GetUsers".toLowerCase(), GetUsers.class);
+
+        // Ping server connection
+        methods.put("Ping".toLowerCase(), Ping.class);
     }
 
     public static Server getInstance() {
@@ -61,13 +60,14 @@ public class Server extends Thread {
 
     @Override
     public void run() {
-        try {
-            // Create server
-            server = new ServerSocket();
-            server.bind(new InetSocketAddress(PORT));
+        try (ServerSocket s = new ServerSocket()) {
+
+            // Bind the server
+            s.bind(new InetSocketAddress(PORT));
+            this.server = s;
 
             // Accept new connections
-            while (isServerRunning()) {
+            while (isRunning.get()) {
                 try {
 
                     // Max clients reached (improve performance)
@@ -77,7 +77,7 @@ public class Server extends Thread {
                     }
 
                     // Wrap connections into Thread Clients
-                    Socket clientSocket = server.accept();
+                    Socket clientSocket = s.accept();
 
                     // New connection
                     LOGGER.log("Client connected: " + clientSocket.getRemoteSocketAddress());
@@ -96,20 +96,14 @@ public class Server extends Thread {
 
         } catch (IOException ex) {
             LOGGER.error("Error during server running: " + ex.getMessage());
-
-        } finally {
-
-            // Close socket no matter what happens
-            try {server.close();} catch (IOException ignored) {}
         }
     }
 
     public void handle(Request r) throws IOException {
         LOGGER.log("Handled: " + Client.json.toJson(r));
 
-        // Get method and client
+        // Get method
         String method = r.getMethod();
-        Client c = r.getClient();
 
         // Packet method is empty
         if (method == null) {
@@ -117,38 +111,28 @@ public class Server extends Thread {
             return;
         }
 
-        // Convert method in lowercase
-        method = method.toLowerCase();
-
         // Get class method
         Method t;
         try {
-            t = methods.get(method).getDeclaredConstructor().newInstance();
+            t = methods.get(method.toLowerCase()).getDeclaredConstructor().newInstance();
         } catch (InstantiationException | NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
             ex.printStackTrace();
             return;
         }
 
         // Need to be authorized and Client is not authorized
-        if (t.isNeededAuth() && !c.validateToken()) {
+        if (t.isNeededAuth() && !r.getClient().validateToken()) {
             r.sendResponse(401, "Unauthorized");
             return;
         }
 
-        // Execute the action
-        Response serverResponse = t.execute(r);
-
-        // Respond to the client
-        r.sendResponse(serverResponse);
+        // Execute the action and respond to the client
+        r.sendResponse(t.execute(r));
     }
 
     public void stopServer() {
         isRunning.set(false);
-        try {
-            server.close();
-        } catch (IOException ignored) {
-
-        }
+        try {server.close();} catch (IOException ignored) {}
     }
 
     public boolean isServerRunning() {
