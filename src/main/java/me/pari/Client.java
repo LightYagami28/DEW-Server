@@ -3,9 +3,9 @@ package me.pari;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
-import me.pari.connection.Message;
-import me.pari.connection.Request;
-import me.pari.connection.Response;
+import me.pari.types.tcp.Message;
+import me.pari.types.tcp.Request;
+import me.pari.types.tcp.Response;
 import org.hydev.logger.HyLogger;
 
 import java.io.*;
@@ -28,16 +28,23 @@ public class Client extends Thread {
     // Json Builder
     public static final Gson json = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
 
-    // Current client status info
+    // Client status
     private final AtomicBoolean isConnected = new AtomicBoolean(false);
+
+    // Data streams
     private final Socket socket;
     private final DataOutputStream output;
     private final DataInputStream input;
+
+    // Cached connection info
     private String authToken;
     private String username;
-    private int userId;
+    private Integer userId;
 
-    public Client(Socket socket) throws IOException {
+    /*
+    * Client builder, private
+    */
+    private Client(Socket socket) throws IOException {
         this.socket = socket;
         this.output = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         this.input = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
@@ -47,6 +54,14 @@ public class Client extends Thread {
             isConnected.set(true);
         }
     }
+
+    public static void startNew(Socket socket) throws IOException {
+        new Client(socket).start();
+    }
+
+    /*
+    * Yea
+    * */
 
     @Override
     public void run() {
@@ -104,16 +119,18 @@ public class Client extends Thread {
         }
     }
 
-    public boolean validateToken() {
+    public boolean isTokenValid() {
         if (authToken == null)
             return false;
         try {
             return !Storage.getInstance().isTokenExpired(authToken);
         } catch (SQLException ex) {
-            LOGGER.error("SQL Exception in isTokenExpired: " + ex.getMessage());
+            LOGGER.error("SQL Exception in isTokenValid: " + ex.getMessage());
             return false;
         }
     }
+
+    // Cache editor
 
     public synchronized void setAuthToken(String authToken) {
         this.authToken = authToken;
@@ -127,9 +144,18 @@ public class Client extends Thread {
         return username;
     }
 
-    public synchronized void setUserId(int userId) {
-        if (this.userId != userId)
-            this.userId = userId;
+    public synchronized void setUserId(Integer userId) {
+        this.userId = userId;
+    }
+
+    public synchronized Integer getUserId() {
+        return userId;
+    }
+
+    public synchronized void resetInfo() {
+        setUserId(null);
+        setUsername(null);
+        setAuthToken(null);
     }
 
     // Communication methods
@@ -148,23 +174,8 @@ public class Client extends Thread {
         this.output.flush();
     }
 
-    // Static methods
-
     public static synchronized List<Client> getClients() {
         return clients;
-    }
-
-    public static void sendMessageBroadcast(int fromUserId, String fromUsername, String text) throws SQLException {
-        int msgId = Storage.getInstance().addMessage(fromUserId, text);
-        Message msg = new Message(msgId, fromUserId, fromUsername, text);
-
-        for (Client c: getClients())
-            try {
-                if (c.validateToken())
-                    c.sendMessage(msg);
-            } catch (IOException ignored) {
-
-            }
     }
 
     public void sendMessageBroadcast(String text) throws SQLException {
@@ -173,7 +184,7 @@ public class Client extends Thread {
 
         for (Client c: getClients())
             try {
-                if (c.validateToken())
+                if (c.isTokenValid())
                     c.sendMessage(msg);
             } catch (IOException ignored) {
 

@@ -1,4 +1,4 @@
-package me.pari.connection;
+package me.pari.types.tcp;
 
 import com.google.gson.annotations.Expose;
 import me.pari.Client;

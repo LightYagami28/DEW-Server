@@ -1,10 +1,11 @@
-package me.pari.connection;
+package me.pari.types.tcp;
 
 import com.google.gson.annotations.Expose;
 
 import java.util.HashMap;
 
 public class Response extends Packet {
+
     @Expose
     private final int status;
 
@@ -12,25 +13,23 @@ public class Response extends Packet {
     private final String desc;
 
     @Expose
-    private HashMap<String, String> values;
+    private final HashMap<String, String> values;
 
     /*
     * Server response to the client request.
-    *
     * */
     public Response(int id, int status, String desc) {
         super(id);
         this.status = status;
         this.desc = desc;
+        this.values = new HashMap<>();
     }
 
     public Response(int id, int status) {
-        super(id);
-        this.status = status;
-        this.desc = null;
+        this(id, status, null);
     }
 
-    public void setValues(HashMap<String, String> values) {
-        this.values = values;
+    public void setValue(String key, String value) {
+        this.values.put(key, value);
     }
 }

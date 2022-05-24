@@ -1,7 +1,12 @@
 package me.pari;
 
-import me.pari.connection.Request;
-import me.pari.methods.*;
+import me.pari.controllers.auth.*;
+import me.pari.controllers.messages.*;
+import me.pari.controllers.users.*;
+import me.pari.controllers.*;
+
+import me.pari.types.tcp.Message;
+import me.pari.types.tcp.Request;
 import org.hydev.logger.HyLogger;
 
 import java.io.IOException;
@@ -9,6 +14,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -18,38 +24,38 @@ public class Server extends Thread {
     // Logger
     private static final HyLogger LOGGER = new HyLogger("Server");
 
-    // Some settings
+    // Server settings
     public static final int PORT = 7777;
     public static final int MAX_CLIENTS = 200;
     public static final String DATABASE_NAME = "database.db";
 
-    // Singleton
+    // Singleton instance
     private static Server INSTANCE;
 
-    // Methods
-    public static HashMap<String, Class<? extends Method>> methods = new HashMap<>();
-
-    // Server running atomic
+    public static HashMap<String, Class<? extends Controller>> controllers = new HashMap<>();
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
-
-    // Server socket
     private ServerSocket server;
 
-    public Server() {
+    private Server() {
 
-        // Auth methods
-        methods.put("CreateUser".toLowerCase(), CreateUser.class);
-        methods.put("AuthUser".toLowerCase(), AuthUser.class);
+        if (INSTANCE != null)
+            return;
 
-        // Send message to server
-        methods.put("SendMessage".toLowerCase(), SendMessage.class);
+        // Auth controllers
+        controllers.put("SignUp".toLowerCase(), SignUp.class);
+        controllers.put("SignIn".toLowerCase(), SignIn.class);
+        controllers.put("SignOut".toLowerCase(), SignOut.class);
 
-        // Get server info
-        methods.put("GetMessages".toLowerCase(), GetMessages.class);
-        methods.put("GetUsers".toLowerCase(), GetUsers.class);
+        // Message controllers
+        controllers.put("GetMessages".toLowerCase(), GetMessages.class);
+        controllers.put("SendMessage".toLowerCase(), SendMessage.class);
 
-        // Ping server connection
-        methods.put("Ping".toLowerCase(), Ping.class);
+        // Users controllers
+        controllers.put("GetUsers".toLowerCase(), GetUsers.class);
+        controllers.put("GetUser".toLowerCase(), GetUser.class);
+
+        // Utils controllers
+        controllers.put("Ping".toLowerCase(), Ping.class);
     }
 
     public static Server getInstance() {
@@ -83,7 +89,7 @@ public class Server extends Thread {
                     LOGGER.log("Client connected: " + clientSocket.getRemoteSocketAddress());
 
                     // Handle new connection
-                    new Client(clientSocket).start();
+                    Client.startNew(clientSocket);
 
                 } catch (IOException ex) {
 
@@ -92,6 +98,13 @@ public class Server extends Thread {
                         LOGGER.warning("Error handling new client: " + ex.getMessage());
                     }
                 }
+            }
+
+            // Last message
+            try {
+                sendMessageBroadcast("Server closed.");
+            } catch (SQLException ex) {
+                LOGGER.warning("Error during broadcast of closed server: " + ex.getMessage());
             }
 
         } catch (IOException ex) {
@@ -111,17 +124,19 @@ public class Server extends Thread {
             return;
         }
 
+        // TODO: Manage flood
+
         // Get class method
-        Method t;
+        Controller t;
         try {
-            t = methods.get(method.toLowerCase()).getDeclaredConstructor().newInstance();
+            t = controllers.get(method.toLowerCase()).getDeclaredConstructor().newInstance();
         } catch (InstantiationException | NoSuchMethodException | IllegalAccessException | InvocationTargetException ex) {
             ex.printStackTrace();
             return;
         }
 
         // Need to be authorized and Client is not authorized
-        if (t.isNeededAuth() && !r.getClient().validateToken()) {
+        if (t.isNeededAuth() && !r.getClient().isTokenValid()) {
             r.sendResponse(401, "Unauthorized");
             return;
         }
@@ -130,9 +145,25 @@ public class Server extends Thread {
         r.sendResponse(t.execute(r));
     }
 
+    public static void sendMessageBroadcast(String text) throws SQLException {
+        int msgId = Storage.getInstance().addMessage(0, text);
+        Message msg = new Message(msgId, 0, "server", text);
+
+        for (Client c: Client.getClients())
+            try {
+                if (c.isTokenValid())
+                    c.sendMessage(msg);
+            } catch (IOException ignored) {}
+    }
+
     public void stopServer() {
         isRunning.set(false);
-        try {server.close();} catch (IOException ignored) {}
+        try {
+            if (server != null)
+                server.close();
+        } catch (IOException ex) {
+            LOGGER.error("Error closing the server: " + ex.getMessage());
+        }
     }
 
     public boolean isServerRunning() {

@@ -6,7 +6,6 @@ import sun.misc.Signal;
 import java.awt.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.SQLException;
 import java.util.List;
 
 
@@ -33,6 +32,7 @@ public class Main {
     private static final HyLogger LOGGER = new HyLogger("Main");
 
     public static void main(String[] args) {
+
         // Create server
         Server s = Server.getInstance();
 
@@ -63,11 +63,6 @@ public class Main {
 
     public static void onStopped() {
         LOGGER.getFancy().gradient("Server stopped.", new Color(255, 0, 128), new Color(255, 140, 0));
-        try {
-            Client.sendMessageBroadcast(0, "Server", "Server closed.");
-        } catch (SQLException ex) {
-            LOGGER.warning("Error during broadcast of closed server: " + ex.getMessage());
-        }
 
         // Get client list
         List<Client> clients = Client.getClients();

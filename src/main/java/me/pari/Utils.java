@@ -4,27 +4,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.Random;
-import java.util.concurrent.ThreadLocalRandom;
-
 public class Utils {
-
-    private static final char [] subset = "0123456789abcdefghijklmnopqrstuvwxyz".toCharArray();
-    public static final String SALT = "WhyAreYouGae?";
-
-    public static String generateToken() {
-        Random r = ThreadLocalRandom.current();
-        char[] buf = new char[128];
-        for (int i=0;i<buf.length;i++) {
-            int index = r.nextInt(subset.length);
-            buf[i] = subset[index];
-        }
-        return new String(buf);
-    }
-
-    public static String hashPassword(String password) {
-        return org.apache.commons.codec.digest.DigestUtils.sha256Hex(password + SALT);
-    }
 
     public static boolean isJson(String text) {
         try {
@@ -39,4 +19,7 @@ public class Utils {
         return true;
     }
 
+    public static int getTimeStamp() {
+        return (int) ((System.currentTimeMillis() / 1000L));
+    }
 }

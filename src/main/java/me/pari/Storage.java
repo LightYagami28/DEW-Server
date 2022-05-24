@@ -1,4 +1,5 @@
 package me.pari;
+import me.pari.security.Token;
 import org.hydev.logger.HyLogger;
 
 import java.io.*;
@@ -67,38 +68,46 @@ public class Storage {
         }
     }
 
-    public static int getTimeStamp() {
-        return (int) ((System.currentTimeMillis() / 1000L));
-    }
-
     // Users
 
-    public synchronized String addUser(String username, String password) throws SQLException {
-        String authToken = Utils.generateToken();
+    public synchronized int addUser(String username, String password) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement(
-                "INSERT INTO users (username, password, authToken, expiry, createdAt) VALUES (?, ?, ?, ?, ?)")) {
+                "INSERT INTO users (username, password, createdAt) VALUES (?, ?, ?)",
+                Statement.RETURN_GENERATED_KEYS)) {
             stmt.setString(1, username);
             stmt.setString(2, password);
-            stmt.setString(3, authToken);
-            stmt.setInt(4, getTimeStamp() + 2*60*60);
-            stmt.setInt(5, getTimeStamp());
+            stmt.setInt(3, Utils.getTimeStamp());
             stmt.executeUpdate();
+            try (ResultSet rs = stmt.getGeneratedKeys()) {
+                if (rs.next())
+                    return rs.getInt(1);
+                throw new SQLException("msgId not found");
+            }
         }
-        return authToken;
     }
 
     public synchronized void updateUserToken(int userId, String authToken) throws SQLException {
         try (PreparedStatement stmt = conn.prepareStatement("UPDATE users SET authToken = ?, expiry = ? WHERE id = ?")) {
             stmt.setString(1, authToken);
-            stmt.setInt(2, getTimeStamp()+2*60*60);
+            stmt.setInt(2, Utils.getTimeStamp() + Token.EXPIRY);
+            stmt.setInt(3, userId);
+            stmt.executeUpdate();
+        }
+    }
+
+    public synchronized void removeUserToken(int userId) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("UPDATE users SET authToken = ?, expiry = ? WHERE id = ?")) {
+            stmt.setNull(1, Types.NULL);
+            stmt.setInt(2, 0);
             stmt.setInt(3, userId);
             stmt.executeUpdate();
         }
     }
 
     public synchronized int getUserIdByToken(String authToken) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement("SELECT id FROM users WHERE authToken LIKE ?")) {
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT id FROM users WHERE authToken LIKE ? AND expiry > ?")) {
             stmt.setString(1, authToken);
+            stmt.setInt(2, Utils.getTimeStamp());
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next())
                         return rs.getInt("id");
@@ -111,10 +120,8 @@ public class Storage {
         try (PreparedStatement stmt = conn.prepareStatement("SELECT expiry FROM users WHERE authToken LIKE ?")) {
             stmt.setString(1, authToken);
             try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next()) {
-                    int exp = rs.getInt("expiry");
-                    return exp < getTimeStamp();
-                }
+                if (rs.next())
+                    return rs.getInt("expiry") < Utils.getTimeStamp();
                 return true;
             }
         }
@@ -142,6 +149,17 @@ public class Storage {
         }
     }
 
+    public synchronized String getUsernameByUserId(int userId) throws SQLException {
+        try (PreparedStatement stmt = conn.prepareStatement("SELECT username FROM users WHERE id = ?")) {
+            stmt.setInt(1, userId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next())
+                    return rs.getString("username");
+                throw new SQLException("Username not found");
+            }
+        }
+    }
+
 
     // Messages
 
@@ -150,7 +168,7 @@ public class Storage {
                 "INSERT INTO messages (userId, text, createdAt) VALUES (?, ?, ?)", Statement.RETURN_GENERATED_KEYS)) {
             stmt.setInt(1, userId);
             stmt.setString(2, text);
-            stmt.setInt(3, getTimeStamp());
+            stmt.setInt(3, Utils.getTimeStamp());
             stmt.executeUpdate();
             try (ResultSet rs = stmt.getGeneratedKeys()) {
                 if (rs.next())
@@ -169,17 +187,6 @@ public class Storage {
                 if (rs.next())
                     return rs.getInt(1);
                 throw new SQLException("msgId not found");
-            }
-        }
-    }
-
-    public synchronized String getUsernameByUserId(int userId) throws SQLException {
-        try (PreparedStatement stmt = conn.prepareStatement("SELECT username FROM users WHERE id = ?")) {
-            stmt.setInt(1, userId);
-            try (ResultSet rs = stmt.executeQuery()) {
-                if (rs.next())
-                    return rs.getString("username");
-                throw new SQLException("Username not found");
             }
         }
     }

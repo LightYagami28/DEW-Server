@@ -1,4 +1,4 @@
-package me.pari.connection;
+package me.pari.types;
 
 public class Status {
 
