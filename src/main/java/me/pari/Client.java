@@ -3,6 +3,7 @@ package me.pari;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonSyntaxException;
+import me.pari.types.UserAuth;
 import me.pari.types.tcp.Message;
 import me.pari.types.tcp.Request;
 import me.pari.types.tcp.Response;
@@ -37,13 +38,8 @@ public class Client extends Thread {
     private final DataInputStream input;
 
     // Cached connection info
-    private String authToken;
-    private String username;
-    private Integer userId;
+    public UserAuth user;
 
-    /*
-    * Client builder, private
-    */
     private Client(Socket socket) throws IOException {
         this.socket = socket;
         this.output = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
@@ -58,10 +54,6 @@ public class Client extends Thread {
     public static void startNew(Socket socket) throws IOException {
         new Client(socket).start();
     }
-
-    /*
-    * Yea
-    * */
 
     @Override
     public void run() {
@@ -119,48 +111,9 @@ public class Client extends Thread {
         }
     }
 
-    public boolean isTokenValid() {
-        if (authToken == null)
-            return false;
-        try {
-            return !Storage.getInstance().isTokenExpired(authToken);
-        } catch (SQLException ex) {
-            LOGGER.error("SQL Exception in isTokenValid: " + ex.getMessage());
-            return false;
-        }
-    }
-
-    // Cache editor
-
-    public synchronized void setAuthToken(String authToken) {
-        this.authToken = authToken;
-    }
-
-    public synchronized void setUsername(String username) {
-        this.username = username;
-    }
-
-    public synchronized String getUsername() {
-        return username;
-    }
-
-    public synchronized void setUserId(Integer userId) {
-        this.userId = userId;
-    }
-
-    public synchronized Integer getUserId() {
-        return userId;
-    }
-
-    public synchronized void resetInfo() {
-        setUserId(null);
-        setUsername(null);
-        setAuthToken(null);
-    }
-
     // Communication methods
 
-    public void sendMessage(Message msg) throws IOException {
+    public void sendEvent(Message msg) throws IOException {
         this.output.writeBytes(json.toJson(msg));
         this.output.flush();
     }
@@ -184,8 +137,8 @@ public class Client extends Thread {
 
         for (Client c: getClients())
             try {
-                if (c.isTokenValid())
-                    c.sendMessage(msg);
+                if (c.user.isAuth())
+                    c.sendEvent(msg);
             } catch (IOException ignored) {
 
             }

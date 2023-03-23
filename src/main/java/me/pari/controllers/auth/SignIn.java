@@ -1,14 +1,13 @@
 package me.pari.controllers.auth;
 
 import me.pari.Client;
-import me.pari.Utils;
+import me.pari.Storage;
 import me.pari.controllers.Controller;
 import me.pari.security.Password;
 import me.pari.security.Token;
+import me.pari.types.Status;
 import me.pari.types.tcp.Request;
 import me.pari.types.tcp.Response;
-import me.pari.types.Status;
-import me.pari.Storage;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.SQLException;
@@ -43,7 +42,7 @@ public class SignIn extends Controller {
                     throw new SQLException();
 
                 // Get userId associated to the token
-                c.setUserId(db.getUserIdByToken(params.get("authToken")));
+                c.user.setId(db.getUserIdByToken(params.get("authToken")));
 
             } catch (SQLException ex) {
                 return new Response(req.getId(), Status.BAD_REQUEST, "AuthToken invalid");
@@ -51,18 +50,18 @@ public class SignIn extends Controller {
 
             // Try to update new token in database
             try {
-                db.updateUserToken(c.getUserId(), newToken);
+                db.updateUserToken(c.user.getId(), newToken);
             } catch (SQLException ex) {
                 return new Response(req.getId(), Status.INTERNAL_ERROR, "SQL Error: " + ex.getMessage());
             }
 
             // Set new token in cache
-            c.setAuthToken(newToken);
+            c.user.setAuthToken(newToken);
 
             // Set username (if not already set)
-            if (c.getUsername() == null)
+            if (c.user.getUsername() == null)
                 try {
-                    c.setUsername(db.getUsernameByUserId(c.getUserId()));
+                    c.user.setUsername(db.getUsernameByUserId(c.user.getId()));
                 } catch (SQLException ex) {
                     return new Response(req.getId(), Status.INTERNAL_ERROR, "SQL Error: " + ex.getMessage());
                 }
@@ -95,8 +94,8 @@ public class SignIn extends Controller {
 
         // Get userId and db password
         try {
-            c.setUserId(db.getUserId(username.toLowerCase()));
-            databasePassword = db.getUserPassword(c.getUserId());
+            c.user.setId(db.getUserId(username.toLowerCase()));
+            databasePassword = db.getUserPassword(c.user.getId());
         } catch (SQLException ex) {
             return new Response(req.getId(), Status.BAD_REQUEST, "Username not exists");
         }
@@ -110,14 +109,14 @@ public class SignIn extends Controller {
 
         // Try to update new token in database
         try {
-            db.updateUserToken(c.getUserId(), newToken);
+            db.updateUserToken(c.user.getId(), newToken);
         } catch (SQLException ex) {
             return new Response(req.getId(), Status.INTERNAL_ERROR, "SQL Error: " + ex.getMessage());
         }
 
         // Set new info in cache
-        c.setAuthToken(newToken);
-        c.setUsername(params.get("username"));
+        c.user.setAuthToken(newToken);
+        c.user.setUsername(params.get("username"));
 
         // Build response
         serverResponse.setValue("authToken", newToken);

@@ -1,5 +1,6 @@
 package me.pari.controllers.messages;
 
+import me.pari.Storage;
 import me.pari.controllers.Controller;
 import me.pari.types.tcp.Request;
 import me.pari.types.tcp.Response;
@@ -19,6 +20,7 @@ public class SendMessage extends Controller {
         if (params == null)
             return new Response(req.getId(), 400, "Params are empty");
 
+        int chatId = Integer.parseInt(params.get("chat_id"));
         String text = params.get("text");
 
         // Message not provided
@@ -32,6 +34,26 @@ public class SendMessage extends Controller {
         // Text not provided
         if (text.isBlank())
             return new Response(req.getId(), Status.BAD_REQUEST, "Message text empty");
+
+        Storage db = Storage.getInstance();
+
+        // Check if chatId exits
+        try {
+            if (db.getUsernameByUserId(chatId) != null) {
+
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+
+        // Add message to Database
+
+        try {
+            int msgId = db.addMessage(req.getClient().user.getId(), text);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
 
         // Send message to all clients
         try {

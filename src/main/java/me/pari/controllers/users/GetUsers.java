@@ -10,6 +10,7 @@ import org.json.JSONArray;
 import java.util.List;
 
 public class GetUsers extends Controller {
+
     @Override
     public Response execute(@NotNull Request req) {
         Response serverResponse = createOkResponse(req);

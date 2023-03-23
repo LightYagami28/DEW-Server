@@ -1,11 +1,18 @@
 package me.pari;
 
-import me.pari.controllers.auth.*;
-import me.pari.controllers.messages.*;
-import me.pari.controllers.users.*;
-import me.pari.controllers.*;
-
-import me.pari.types.tcp.Message;
+import me.pari.controllers.Controller;
+import me.pari.controllers.Ping;
+import me.pari.controllers.auth.SignIn;
+import me.pari.controllers.auth.SignOut;
+import me.pari.controllers.auth.SignUp;
+import me.pari.controllers.chats.JoinChat;
+import me.pari.controllers.chats.LeaveChat;
+import me.pari.controllers.chats.RemoveUser;
+import me.pari.controllers.messages.GetMessages;
+import me.pari.controllers.messages.SendMessage;
+import me.pari.controllers.users.GetUser;
+import me.pari.controllers.users.GetUsers;
+import me.pari.types.Status;
 import me.pari.types.tcp.Request;
 import org.hydev.logger.HyLogger;
 
@@ -14,7 +21,6 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -45,6 +51,11 @@ public class Server extends Thread {
         controllers.put("SignUp".toLowerCase(), SignUp.class);
         controllers.put("SignIn".toLowerCase(), SignIn.class);
         controllers.put("SignOut".toLowerCase(), SignOut.class);
+
+        // Chats controllers
+        controllers.put("JoinChat".toLowerCase(), JoinChat.class);
+        controllers.put("LeaveChat".toLowerCase(), LeaveChat.class);
+        controllers.put("RemoveUser".toLowerCase(), RemoveUser.class);
 
         // Message controllers
         controllers.put("GetMessages".toLowerCase(), GetMessages.class);
@@ -100,13 +111,6 @@ public class Server extends Thread {
                 }
             }
 
-            // Last message
-            try {
-                sendMessageBroadcast("Server closed.");
-            } catch (SQLException ex) {
-                LOGGER.warning("Error during broadcast of closed server: " + ex.getMessage());
-            }
-
         } catch (IOException ex) {
             LOGGER.error("Error during server running: " + ex.getMessage());
         }
@@ -120,7 +124,7 @@ public class Server extends Thread {
 
         // Packet method is empty
         if (method == null) {
-            r.sendResponse(400, "BadRequest");
+            r.sendResponse(Status.BAD_REQUEST, "BadRequest");
             return;
         }
 
@@ -136,24 +140,13 @@ public class Server extends Thread {
         }
 
         // Need to be authorized and Client is not authorized
-        if (t.isNeededAuth() && !r.getClient().isTokenValid()) {
-            r.sendResponse(401, "Unauthorized");
+        if (t.isNeededAuth() && !r.getClient().user.isAuth()) {
+            r.sendResponse(Status.UNAUTHORIZED, "Unauthorized");
             return;
         }
 
         // Execute the action and respond to the client
         r.sendResponse(t.execute(r));
-    }
-
-    public static void sendMessageBroadcast(String text) throws SQLException {
-        int msgId = Storage.getInstance().addMessage(0, text);
-        Message msg = new Message(msgId, 0, "server", text);
-
-        for (Client c: Client.getClients())
-            try {
-                if (c.isTokenValid())
-                    c.sendMessage(msg);
-            } catch (IOException ignored) {}
     }
 
     public void stopServer() {

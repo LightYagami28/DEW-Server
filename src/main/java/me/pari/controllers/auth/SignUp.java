@@ -1,14 +1,13 @@
 package me.pari.controllers.auth;
 
 import me.pari.Client;
-import me.pari.Utils;
+import me.pari.Storage;
 import me.pari.controllers.Controller;
 import me.pari.security.Password;
 import me.pari.security.Token;
+import me.pari.types.Status;
 import me.pari.types.tcp.Request;
 import me.pari.types.tcp.Response;
-import me.pari.types.Status;
-import me.pari.Storage;
 import org.jetbrains.annotations.NotNull;
 
 import java.sql.SQLException;
@@ -71,8 +70,8 @@ public class SignUp extends Controller {
 
         // Sign up user into database and update the authToken
         try {
-            c.setUserId(db.addUser(username, Password.hash(password)));
-            db.updateUserToken(c.getUserId(), authToken);
+            c.user.setId(db.addUser(username, Password.hash(password)));
+            db.updateUserToken(c.user.getId(), authToken);
 
         } catch (SQLException ex) {
             return new Response(req.getId(), Status.INTERNAL_ERROR, "SQL Error: " + ex.getMessage());
